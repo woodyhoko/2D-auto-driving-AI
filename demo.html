@@ -105,8 +105,16 @@ class NN {
     for(const [x,yt] of pairs){
       const y=this.fwd(x);
       const dL_do=y.map((o,i)=>(o-yt[i]));
-      // output layer update
-      for(let i=0;i<OUT;i++){const ds=dL_do[i]*(1-y[i]*y[i]);for(let j=0;j<HID;j++)this.w2[i][j]-=lr*ds*this.h[j];this.b2[i]-=lr*ds;}
+      // output layer gradients
+      const ds2=dL_do.map((d,i)=>d*(1-y[i]*y[i]));
+      for(let i=0;i<OUT;i++){for(let j=0;j<HID;j++)this.w2[i][j]-=lr*ds2[i]*this.h[j];this.b2[i]-=lr*ds2[i];}
+      // hidden layer gradients (backprop through ReLU)
+      for(let j=0;j<HID;j++){
+        const dh=ds2.reduce((s,d,i)=>s+d*this.w2[i][j],0);
+        const relu_gate=this.h[j]>0?1:0;
+        for(let k=0;k<IN;k++)this.w1[j][k]-=lr*dh*relu_gate*x[k];
+        this.b1[j]-=lr*dh*relu_gate;
+      }
     }
   }
 }
