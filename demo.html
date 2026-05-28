@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2D Auto-Driving AI — LBNE Demo</title>
+<style>
+  :root { --bg:#0b0f1a; --panel:#121a2e; --acc:#4ecca3; --acc2:#e94560; --ink:#e6edf3; --muted:#8b9bb4; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(1200px 800px at 70% -10%,#1b2746 0%,var(--bg) 60%);color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;overflow:hidden;height:100vh}
+  #wrap{display:flex;gap:14px;padding:14px;height:100vh}
+  #stage{position:relative;flex:1;min-width:0}
+  #track{width:100%;height:100%;display:block;border-radius:16px;background:linear-gradient(160deg,#0e1730,#0a1020);box-shadow:0 10px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)}
+  aside{width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+  .card{background:var(--panel);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px 16px}
+  h1{font-size:17px;margin:0 0 2px;letter-spacing:.3px}
+  h1 span{color:var(--acc)}
+  .sub{color:var(--muted);font-size:11px}
+  .stat{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.06)}
+  .stat:last-child{border-bottom:none}
+  .stat b{color:var(--acc);font-variant-numeric:tabular-nums}
+  label{font-size:11px;color:var(--muted);display:block;margin:8px 0 3px}
+  input[type=range]{width:100%;accent-color:var(--acc)}
+  .btns{display:flex;gap:8px;margin-top:10px}
+  button{flex:1;padding:8px;border:none;border-radius:9px;cursor:pointer;background:#1e2a47;color:var(--ink);font-size:12px;transition:.15s}
+  button:hover{background:#27375e}
+  button.primary{background:var(--acc);color:#06281f;font-weight:600}
+  button.primary:hover{filter:brightness(1.08)}
+  canvas#net,canvas#chart{width:100%;display:block;border-radius:8px;background:#0c1426}
+  .legend{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  kbd{background:#1e2a47;border-radius:5px;padding:1px 5px;font-size:10px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage"><canvas id="track"></canvas></div>
+  <aside>
+    <div class="card">
+      <h1>2D <span>Auto-Driving AI</span></h1>
+      <p class="sub">LBNE — Learning-Based Neuroevolution. Backprop + GA in a browser, no backend.</p>
+    </div>
+    <div class="card">
+      <div class="stat"><span>Generation</span><b id="gen">1</b></div>
+      <div class="stat"><span>Alive</span><b id="alive">0</b></div>
+      <div class="stat"><span>Best (gen)</span><b id="genbest">0</b></div>
+      <div class="stat"><span>Best (all)</span><b id="best">0</b></div>
+      <div class="stat"><span>Laps (leader)</span><b id="laps">0</b></div>
+    </div>
+    <div class="card">
+      <label>Speed — <span id="sv">1×</span></label>
+      <input id="speed" type="range" min="1" max="20" value="1">
+      <label>Mutation rate — <span id="mv">0.10</span></label>
+      <input id="mr" type="range" min="0" max="50" value="10">
+      <label>Population — <span id="pv">80</span></label>
+      <input id="ps" type="range" min="20" max="200" value="80" step="10">
+      <div class="btns">
+        <button class="primary" id="newt">New Track</button>
+        <button id="rst">Restart</button>
+      </div>
+      <div class="legend">
+        <span class="dot" style="background:#4ecca3"></span>Champion
+        <span class="dot" style="background:#e94560"></span>Population<br>
+        <kbd>Space</kbd> fast-forward
+      </div>
+    </div>
+    <div class="card">
+      <h1 style="font-size:12px">Champion's Neural Network</h1>
+      <canvas id="net" height="140"></canvas>
+      <div class="legend">5 rays → 6 hidden (ReLU) → 2 outputs (steer, throttle). Edge brightness ∝ |weight|.</div>
+    </div>
+    <div class="card">
+      <h1 style="font-size:12px">Fitness per Generation</h1>
+      <canvas id="chart" height="100"></canvas>
+    </div>
+  </aside>
+</div>
+<script>
+const cv=document.getElementById('track'),ctx=cv.getContext('2d');
+const nc=document.getElementById('net'),nCtx=nc.getContext('2d');
+const cc=document.getElementById('chart'),cCtx=cc.getContext('2d');
+let W=0,H=0,DPR=Math.min(devicePixelRatio||1,2);
+function fit(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);[nc,cc].forEach(c=>{const rr=c.getBoundingClientRect();c.width=rr.width*DPR;c.height=rr.height*DPR;c.getContext('2d').setTransform(DPR,0,0,DPR,0,0)});}
+window.addEventListener('resize',()=>{fit();buildTrack()});
+
+// ─── Neural Network (5→6→2) ───────────────────────────────────────────────
+const IN=5,HID=6,OUT=2;
+const rnd=()=>Math.random()*2-1;
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class NN {
+  constructor(src){
+    this.w1=[];this.b1=[];this.w2=[];this.b2=[];
+    for(let i=0;i<HID;i++){this.w1.push([]);for(let j=0;j<IN;j++)this.w1[i].push(src?src.w1[i][j]:rnd());this.b1.push(src?src.b1[i]:rnd());}
+    for(let i=0;i<OUT;i++){this.w2.push([]);for(let j=0;j<HID;j++)this.w2[i].push(src?src.w2[i][j]:rnd());this.b2.push(src?src.b2[i]:rnd());}
+  }
+  fwd(x){
+    this.h=this.w1.map((r,i)=>Math.max(0,r.reduce((s,w,j)=>s+w*x[j],this.b1[i])));
+    this.o=this.w2.map((r,i)=>Math.tanh(r.reduce((s,w,j)=>s+w*this.h[j],this.b2[i])));
+    return this.o;
+  }
+  clone(){return new NN(this);}
+  mutate(rate){const m=v=>Math.random()<rate?v+gauss()*.45:v;this.w1=this.w1.map(r=>r.map(m));this.b1=this.b1.map(m);this.w2=this.w2.map(r=>r.map(m));this.b2=this.b2.map(m);}
+  // LBNE: supervised fine-tune on champion's recent I/O pairs
+  learn(pairs,lr=0.04){
+    for(const [x,yt] of pairs){
+      const y=this.fwd(x);
+      const dL_do=y.map((o,i)=>(o-yt[i]));
+      // output layer update
+      for(let i=0;i<OUT;i++){const ds=dL_do[i]*(1-y[i]*y[i]);for(let j=0;j<HID;j++)this.w2[i][j]-=lr*ds*this.h[j];this.b2[i]-=lr*ds;}
+    }
+  }
+}
+
+// ─── Track ────────────────────────────────────────────────────────────────
+let walls=[],gates=[],start={x:0,y:0,a:0};
+function buildTrack(){
+  walls=[];gates=[];
+  const cx=W/2,cy=H/2,pts=14;
+  const sx=Math.min(W,H*1.4)/2-55,sy=Math.min(H,W/1.4)/2-45;
+  const seedA=Math.random()*6.28,seedB=2+Math.floor(Math.random()*3);
+  const outer=[],inner=[];
+  for(let i=0;i<pts;i++){const a=(i/pts)*Math.PI*2,w=Math.sin(a*seedB+seedA),ro=1+w*.18,ri=.55+w*.14;outer.push([cx+Math.cos(a)*sx*ro,cy+Math.sin(a)*sy*ro]);inner.push([cx+Math.cos(a)*sx*ri,cy+Math.sin(a)*sy*ri]);}
+  for(let i=0;i<pts;i++){const j=(i+1)%pts;walls.push([outer[i][0],outer[i][1],outer[j][0],outer[j][1]]);walls.push([inner[i][0],inner[i][1],inner[j][0],inner[j][1]]);gates.push([inner[i][0],inner[i][1],outer[i][0],outer[i][1]]);}
+  const mx=(inner[0][0]+outer[0][0])/2,my=(inner[0][1]+outer[0][1])/2,nx=(inner[1][0]+outer[1][0])/2,ny=(inner[1][1]+outer[1][1])/2;
+  start={x:mx,y:my,a:Math.atan2(ny-my,nx-mx)};
+}
+
+// ─── Car ──────────────────────────────────────────────────────────────────
+const RAY=200,ANGS=[-Math.PI/2,-Math.PI/4,0,Math.PI/4,Math.PI/2];
+class Car{
+  constructor(nn){this.nn=nn||new NN();this.reset();}
+  reset(){this.x=start.x;this.y=start.y;this.angle=start.a;this.speed=0;this.alive=true;this.fitness=0;this.gate=1;this.laps=0;this.time=0;this.idle=0;this.rays=[];this.ios=[];}
+  sense(){
+    this.rays=[];const out=[];
+    for(const da of ANGS){const ra=this.angle+da,ex=this.x+Math.cos(ra)*RAY,ey=this.y+Math.sin(ra)*RAY;let best=RAY,hx=ex,hy=ey;for(const w of walls){const d=raySeg(this.x,this.y,ex,ey,w);if(d!==null&&d<best){best=d;hx=this.x+Math.cos(ra)*d;hy=this.y+Math.sin(ra)*d;}}this.rays.push([hx,hy,best]);out.push(best/RAY);}
+    return out;
+  }
+  update(){
+    if(!this.alive)return;
+    const s=this.sense();
+    const[steer,throttle]=this.nn.fwd(s);
+    this.angle+=steer*.075;this.speed+=(throttle*.22);this.speed*=.96;this.speed=Math.max(-1.5,Math.min(5.5,this.speed));
+    this.x+=Math.cos(this.angle)*this.speed;this.y+=Math.sin(this.angle)*this.speed;this.time++;
+    for(const w of walls)if(ptSeg(this.x,this.y,w)<7){this.alive=false;return;}
+    const g=gates[this.gate%gates.length];
+    if(ptSeg(this.x,this.y,g)<34){this.ios.push([s,this.nn.o.slice()]);if(this.ios.length>40)this.ios.shift();this.gate++;this.fitness+=100;this.idle=0;if(this.gate%gates.length===0)this.laps++;}
+    this.fitness+=Math.max(0,this.speed)*.06;
+    if(this.speed<.15)this.idle++;else this.idle=0;
+    if(this.idle>90||this.time>2500)this.alive=false;
+  }
+  draw(isChamp){
+    if(isChamp)for(const[hx,hy,d]of this.rays){ctx.strokeStyle=`rgba(78,204,163,${.08+.5*(1-d/RAY)})`;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(this.x,this.y);ctx.lineTo(hx,hy);ctx.stroke();ctx.fillStyle='#4ecca3';ctx.beginPath();ctx.arc(hx,hy,2.5,0,6.28);ctx.fill();}
+    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this.angle);
+    if(isChamp){ctx.shadowColor='#4ecca3';ctx.shadowBlur=12;ctx.fillStyle='#4ecca3';}else{ctx.fillStyle='rgba(233,69,96,.4)';}
+    ctx.fillRect(-9,-5,18,10);ctx.fillStyle=isChamp?'#06281f':'rgba(255,255,255,.5)';ctx.fillRect(4,-4,4,8);ctx.restore();
+  }
+}
+
+// ─── Geometry ─────────────────────────────────────────────────────────────
+function raySeg(x1,y1,x2,y2,w){const[x3,y3,x4,y4]=w,den=(x1-x2)*(y3-y4)-(y1-y2)*(x3-x4);if(!den)return null;const t=((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/den,u=-((x1-x2)*(y1-y3)-(y1-y2)*(x1-x3))/den;return(t>0&&t<1&&u>0&&u<1)?t*Math.hypot(x2-x1,y2-y1):null;}
+function ptSeg(px,py,w){const[x1,y1,x2,y2]=w,dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;if(!l2)return Math.hypot(px-x1,py-y1);const t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/l2));return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));}
+
+// ─── GA + LBNE ────────────────────────────────────────────────────────────
+let POP=80,pop=[],gen=1,bestAll=0,history=[],champBrain=null,champIOs=[];
+let MR=.10,spd=1;
+function init(){buildTrack();pop=[];champIOs=[];for(let i=0;i<POP;i++){const c=new Car(champBrain?lbneInit():null);pop.push(c);}gen=1;bestAll=0;history=[];}
+function lbneInit(){const n=champBrain.clone();n.mutate(MR);if(champIOs.length>5)n.learn(champIOs.slice(-20),.04);return n;}
+function nextGen(){
+  pop.sort((a,b)=>b.fitness-a.fitness);
+  const gBest=pop[0].fitness;bestAll=Math.max(bestAll,gBest);
+  champBrain=pop[0].nn.clone();
+  if(pop[0].ios.length)champIOs=[...champIOs,...pop[0].ios].slice(-60);
+  history.push(gBest);if(history.length>100)history.shift();
+  const parents=pop.slice(0,Math.max(2,Math.floor(POP*.15)));
+  const next=[new Car(pop[0].nn.clone())];
+  while(next.length<POP){const p=parents[(Math.random()*parents.length)|0];const c=new Car(p.nn.clone());c.nn.mutate(MR);if(champIOs.length>5&&Math.random()<.6)c.nn.learn(champIOs.slice(-20),.04);next.push(c);}
+  pop=next;gen++;
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────
+function drawTrack(){
+  ctx.strokeStyle='#1c2c52';ctx.lineWidth=2;ctx.lineJoin='round';
+  for(const w of walls){ctx.beginPath();ctx.moveTo(w[0],w[1]);ctx.lineTo(w[2],w[3]);ctx.stroke();}
+  const s=gates[0];ctx.strokeStyle='rgba(255,255,255,.2)';ctx.setLineDash([5,5]);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(s[0],s[1]);ctx.lineTo(s[2],s[3]);ctx.stroke();ctx.setLineDash([]);
+}
+function drawNet(car){
+  const w=nc.clientWidth,h=nc.clientHeight;nCtx.clearRect(0,0,w,h);if(!car)return;
+  const xs=[28,w/2,w-28],ys=[IN,HID,OUT].map((n,L)=>Array.from({length:n},(_,k)=>(h*(k+1))/(n+1)));
+  for(let i=0;i<HID;i++)for(let j=0;j<IN;j++)edge(xs[0],ys[0][j],xs[1],ys[1][i],car.nn.w1[i][j]);
+  for(let i=0;i<OUT;i++)for(let j=0;j<HID;j++)edge(xs[1],ys[1][j],xs[2],ys[2][i],car.nn.w2[i][j]);
+  function edge(x1,y1,x2,y2,wt){const a=Math.min(.75,Math.abs(wt)*.45);nCtx.strokeStyle=wt>=0?`rgba(78,204,163,${a})`:`rgba(233,69,96,${a})`;nCtx.lineWidth=Math.min(2.2,Math.abs(wt));nCtx.beginPath();nCtx.moveTo(x1,y1);nCtx.lineTo(x2,y2);nCtx.stroke();}
+  const si=car.sense();
+  node(0,si);node(1,(car.nn.h||[]).map(v=>Math.tanh(v)));node(2,(car.nn.o||[]).map(v=>(v+1)/2));
+  function node(L,vals){for(let k=0;k<[IN,HID,OUT][L];k++){const v=Math.max(0,Math.min(1,vals[k]||0));nCtx.fillStyle=`rgba(120,200,255,${.2+.7*v})`;nCtx.beginPath();nCtx.arc(xs[L],ys[L][k],5.5,0,6.28);nCtx.fill();nCtx.strokeStyle='rgba(255,255,255,.12)';nCtx.stroke();}}
+}
+function drawChart(){
+  const w=cc.clientWidth,h=cc.clientHeight;cCtx.clearRect(0,0,w,h);if(history.length<2)return;
+  const max=Math.max(...history,1);
+  cCtx.beginPath();history.forEach((v,i)=>{const x=i/(history.length-1)*w,y=h-6-(v/max)*(h-12);i?cCtx.lineTo(x,y):cCtx.moveTo(x,y);});
+  cCtx.strokeStyle='#4ecca3';cCtx.lineWidth=2;cCtx.stroke();cCtx.lineTo(w,h);cCtx.lineTo(0,h);cCtx.closePath();cCtx.fillStyle='rgba(78,204,163,.1)';cCtx.fill();
+  cCtx.fillStyle='#8b9bb4';cCtx.font='9px monospace';cCtx.fillText('max '+Math.round(max),3,10);
+}
+
+// ─── Loop ─────────────────────────────────────────────────────────────────
+function frame(){
+  for(let s=0;s<spd;s++){let any=false;for(const c of pop){c.update();if(c.alive)any=true;}if(!any){nextGen();break;}}
+  let champ=pop[0];for(const c of pop)if(c.fitness>champ.fitness)champ=c;
+  ctx.clearRect(0,0,W,H);drawTrack();
+  for(const c of pop)if(c.alive&&c!==champ)c.draw(false);
+  if(champ.alive)champ.draw(true);
+  document.getElementById('gen').textContent=gen;
+  document.getElementById('alive').textContent=pop.filter(c=>c.alive).length;
+  document.getElementById('genbest').textContent=Math.round(champ.fitness);
+  document.getElementById('best').textContent=Math.round(bestAll);
+  document.getElementById('laps').textContent=champ.laps;
+  drawNet(champ);drawChart();requestAnimationFrame(frame);
+}
+
+// ─── UI ───────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+$('speed').oninput=e=>{spd=+e.target.value;$('sv').textContent=spd+'×'};
+$('mr').oninput=e=>{MR=e.target.value/100;$('mv').textContent=MR.toFixed(2)};
+$('ps').oninput=e=>{POP=+e.target.value;$('pv').textContent=POP};
+$('rst').onclick=()=>{champBrain=null;champIOs=[];init()};
+$('newt').onclick=init;
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();spd=spd===1?8:1;$('speed').value=spd;$('sv').textContent=spd+'×';}});
+fit();init();frame();
+</script>
+</body>
+</html>
