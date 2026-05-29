@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LBNE — Learning-Based Neuroevolution</title>
+<meta name="description" content="A hybrid algorithm that evolves neural network topology AND weights via GA while using backpropagation as a secondary learning signal — demonstrated on autonomous driving.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#0e1730;--panel:#121a2e;--acc:#4ecca3;--acc2:#e94560;--ink:#e6edf3;--muted:#8b9bb4;--line:rgba(255,255,255,.07)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:"Space Grotesk",system-ui,sans-serif;overflow-x:hidden;line-height:1.6}
+  a{color:inherit;text-decoration:none}
+  /* animated track grid bg */
+  .grid-bg{position:fixed;inset:0;z-index:0;background:
+      radial-gradient(1200px 700px at 75% -10%,#1b2746 0%,var(--bg) 55%);overflow:hidden}
+  .grid-bg::before{content:"";position:absolute;inset:-50%;background-image:
+      linear-gradient(rgba(78,204,163,.07) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(78,204,163,.07) 1px,transparent 1px);
+      background-size:46px 46px;transform:perspective(420px) rotateX(60deg);
+      animation:scroll 7s linear infinite}
+  @keyframes scroll{to{background-position:0 46px}}
+  .glow{position:fixed;border-radius:50%;filter:blur(90px);opacity:.35;z-index:0}
+  .g1{width:480px;height:480px;background:var(--acc);top:-160px;right:-120px}
+  .g2{width:420px;height:420px;background:var(--acc2);bottom:-180px;left:-140px;opacity:.25}
+  .wrap{position:relative;z-index:2;max-width:1040px;margin:0 auto;padding:0 24px}
+  /* hero */
+  header{min-height:92vh;display:flex;flex-direction:column;justify-content:center;padding:80px 0 40px}
+  .tag{display:inline-flex;align-items:center;gap:8px;font-family:"Orbitron";font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--acc);border:1px solid var(--acc);border-radius:100px;padding:6px 16px;width:fit-content;margin-bottom:26px}
+  .tag .dot{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc);animation:pulse 1.6s infinite}
+  @keyframes pulse{50%{opacity:.3}}
+  h1{font-family:"Orbitron";font-weight:900;font-size:clamp(38px,7vw,82px);line-height:1.02;letter-spacing:-1px}
+  h1 .hl{background:linear-gradient(120deg,var(--acc),#7ef3cf);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:clamp(16px,2vw,21px);color:var(--muted);max-width:680px;margin:24px 0 6px}
+  .by{font-size:14px;color:var(--muted);margin-top:18px}
+  .by b{color:var(--ink)}
+  .cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:38px}
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:15px 26px;border-radius:12px;font-weight:700;font-size:15px;transition:.18s;border:1px solid transparent}
+  .btn.primary{background:var(--acc);color:#06281f;box-shadow:0 10px 30px rgba(78,204,163,.3)}
+  .btn.primary:hover{transform:translateY(-3px);box-shadow:0 16px 40px rgba(78,204,163,.45)}
+  .btn.ghost{background:rgba(255,255,255,.04);border-color:var(--line);color:var(--ink)}
+  .btn.ghost:hover{border-color:var(--acc);color:var(--acc);transform:translateY(-3px)}
+  /* stats strip */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:10px 0 90px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 20px}
+  .stat .n{font-family:"Orbitron";font-size:30px;font-weight:700;color:var(--acc)}
+  .stat .n2{color:var(--acc2)}
+  .stat .l{font-size:13px;color:var(--muted);margin-top:4px}
+  /* sections */
+  section{padding:50px 0}
+  h2{font-family:"Orbitron";font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--acc2);margin-bottom:8px}
+  .h2sub{font-size:clamp(24px,3.4vw,36px);font-weight:700;margin-bottom:34px;letter-spacing:-.5px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px}
+  .card{background:linear-gradient(160deg,var(--panel),#0d1424);border:1px solid var(--line);border-radius:18px;padding:26px;transition:.2s}
+  .card:hover{transform:translateY(-4px);border-color:rgba(78,204,163,.4)}
+  .card .ic{font-size:24px;margin-bottom:14px}
+  .card h3{font-size:17px;margin-bottom:8px}
+  .card p{font-size:14px;color:var(--muted)}
+  pre{background:#070b14;border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:12px;padding:20px 22px;overflow-x:auto;font-size:13px;color:#bfe9da;margin-top:8px;font-family:ui-monospace,Menlo,monospace}
+  footer{border-top:1px solid var(--line);margin-top:60px;padding:40px 0 60px;color:var(--muted);font-size:14px;text-align:center}
+  footer a{color:var(--acc)}
+  .flinks{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div><div class="glow g1"></div><div class="glow g2"></div>
+
+<div class="wrap">
+  <header>
+    <span class="tag"><span class="dot"></span>Neuroevolution · IEEE Paper</span>
+    <h1>Learning-Based<br><span class="hl">Neuroevolution</span></h1>
+    <p class="lede">A hybrid algorithm that evolves both network <b style="color:var(--ink)">topology</b> and <b style="color:var(--ink)">weights</b> via a genetic algorithm — while using backpropagation as a secondary learning signal. Demonstrated on a self-driving task that runs live in your browser.</p>
+    <p class="by">By <b>Ho Ko</b> · ECE, University of Waterloo</p>
+    <div class="cta">
+      <a class="btn primary" href="demo.html">▶ Run the Live Simulation</a>
+      <a class="btn ghost" href="https://github.com/woodyhoko/2D-auto-driving-AI/blob/main/2D%20auto%20driving%20AI.pdf">📄 Read the Paper</a>
+      <a class="btn ghost" href="https://github.com/woodyhoko/2D-auto-driving-AI#readme">📖 Documentation</a>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="n">GA + BP</div><div class="l">Evolves topology, weights & learns</div></div>
+    <div class="stat"><div class="n n2">6 → 2</div><div class="l">Sensor inputs → steer + accelerate</div></div>
+    <div class="stat"><div class="n">Three.js</div><div class="l">+ TensorFlow.js, GPU, in-browser</div></div>
+  </div>
+
+  <section>
+    <h2>The Idea</h2>
+    <div class="h2sub">Inherit traits from parents — but also learn from experience.</div>
+    <div class="cards">
+      <div class="card"><div class="ic">🧬</div><h3>Dual chromosomes</h3><p>A topology chromosome encodes hidden-layer sizes; a parameter chromosome stores weights organized by layer, so feature detectors are inherited hierarchically.</p></div>
+      <div class="card"><div class="ic">🎯</div><h3>Backprop as a side channel</h3><p>Each newborn agent imitates the current best "role model" via backprop before entering the world — no fixed supervised task required, so it applies to any RL problem.</p></div>
+      <div class="card"><div class="ic">🏁</div><h3>Faster convergence</h3><p>Against a pure-GA baseline, LBNE reaches higher fitness per generation by combining exploration (GA) with gradient refinement (BP).</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Fitness Function</h2>
+    <div class="h2sub">Reward speed, punish zigzagging, eliminate stalling.</div>
+    <pre>Score_t = Score_(t-1) + Speed × 2 − |Direction| × 3 − 1</pre>
+  </section>
+
+  <footer>
+    <div class="flinks">
+      <a href="demo.html">Live Demo</a>
+      <a href="https://github.com/woodyhoko/2D-auto-driving-AI">GitHub Repo</a>
+      <a href="https://github.com/woodyhoko/2D-auto-driving-AI#readme">README</a>
+    </div>
+    Built by <a href="https://github.com/woodyhoko">woodyhoko</a> · Learning-Based Neuroevolution
+  </footer>
+</div>
+</body>
+</html>

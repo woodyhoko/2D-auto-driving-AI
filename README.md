@@ -2,7 +2,7 @@
 
 **Ho Ko** — ECE, University of Waterloo
 
-📄 **[Read the Paper](https://github.com/woodyhoko/2D-auto-driving-AI/blob/main/2D%20auto%20driving%20AI.pdf)** | **[▶ Run the Simulation](https://woodyhoko.github.io/2D-auto-driving-AI/track_example.html)**
+📄 **[Read the Paper](https://github.com/woodyhoko/2D-auto-driving-AI/blob/main/2D%20auto%20driving%20AI.pdf)** | **[▶ Run the Simulation](https://woodyhoko.github.io/2D-auto-driving-AI/demo.html)**
 
 ---
 
@@ -82,7 +82,7 @@ Score_t = Score_(t-1) + Speed × 2 − |Direction| × 3 − 1
 
 | File | Description |
 |---|---|
-| `track_example.html` | Interactive browser simulation (Three.js + TF.js) |
+| `demo.html` | Interactive browser simulation (Three.js + TF.js) |
 | `2D auto driving AI.pdf` | Full paper (8 pages) — IEEE format |
 | `Artificial_life_proposal_.pdf` | Initial project proposal |
 
@@ -93,7 +93,7 @@ Score_t = Score_(t-1) + Speed × 2 − |Direction| × 3 − 1
 ```bash
 # Open directly in browser (or serve for full functionality):
 python -m http.server 8000
-# then open http://localhost:8000/track_example.html
+# then open http://localhost:8000/demo.html
 ```
 
 The simulation runs in your browser using WebGL (Three.js) for rendering and TensorFlow.js for neural network inference — no Python or server required for the demo.

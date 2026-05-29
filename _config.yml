@@ -1,0 +1,3 @@
+theme: jekyll-theme-midnight
+title: Learning-Based Neuroevolution (LBNE)
+description: A hybrid GA + backpropagation algorithm that evolves neural network topology and weights, demonstrated on autonomous driving.
