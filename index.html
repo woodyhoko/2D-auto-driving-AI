@@ -63,6 +63,18 @@
   footer{border-top:1px solid var(--line);margin-top:60px;padding:40px 0 60px;color:var(--muted);font-size:14px;text-align:center}
   footer a{color:var(--acc)}
   .flinks{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
+  @media(max-width:640px){
+    .wrap{padding:0 18px}
+    header{min-height:auto;padding:60px 0 30px}
+    .cta{gap:10px}
+    .btn{padding:14px 18px;font-size:14px;flex:1 1 100%;justify-content:center}
+    .stats{grid-template-columns:1fr;gap:12px;margin:6px 0 60px}
+    .stat{padding:18px}
+    .stat .n{font-size:26px}
+    section{padding:38px 0}
+    .card{padding:22px}
+    pre{font-size:12px;padding:16px}
+  }
 </style>
 </head>
 <body>
@@ -70,7 +82,7 @@
 
 <div class="wrap">
   <header>
-    <span class="tag"><span class="dot"></span>Neuroevolution · IEEE Paper</span>
+    <span class="tag"><span class="dot"></span>Neuroevolution · Technical Paper</span>
     <h1>Learning-Based<br><span class="hl">Neuroevolution</span></h1>
     <p class="lede">A hybrid algorithm that evolves both network <b style="color:var(--ink)">topology</b> and <b style="color:var(--ink)">weights</b> via a genetic algorithm — while using backpropagation as a secondary learning signal. Demonstrated on a self-driving task that runs live in your browser.</p>
     <p class="by">By <b>Ho Ko</b> · ECE, University of Waterloo</p>

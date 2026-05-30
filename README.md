@@ -83,7 +83,7 @@ Score_t = Score_(t-1) + Speed × 2 − |Direction| × 3 − 1
 | File | Description |
 |---|---|
 | `demo.html` | Interactive browser simulation (Three.js + TF.js) |
-| `2D auto driving AI.pdf` | Full paper (8 pages) — IEEE format |
+| `2D auto driving AI.pdf` | Full paper (8 pages) |
 | `Artificial_life_proposal_.pdf` | Initial project proposal |
 
 ---
